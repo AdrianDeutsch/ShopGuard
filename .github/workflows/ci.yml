@@ -68,10 +68,7 @@ jobs:
       - name: Build
         run: dotnet build ShopGuard/ShopGuard.E2ETests -c Release
       - name: Install Playwright (Chromium)
-        run: |
-          dotnet tool install --global Microsoft.Playwright.CLI
-          export PATH="$PATH:$HOME/.dotnet/tools"
-          playwright install --with-deps chromium
+        run: pwsh ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
       - name: Smoke tests
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
@@ -108,10 +105,7 @@ jobs:
       - name: Build
         run: dotnet build ShopGuard/ShopGuard.E2ETests -c Release
       - name: Install Playwright (Chromium)
-        run: |
-          dotnet tool install --global Microsoft.Playwright.CLI
-          export PATH="$PATH:$HOME/.dotnet/tools"
-          playwright install --with-deps chromium
+        run: pwsh ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
       - name: E2E tests
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
@@ -146,10 +140,7 @@ jobs:
       - name: Build
         run: dotnet build ShopGuard -c Release
       - name: Install Playwright (Chromium)
-        run: |
-          dotnet tool install --global Microsoft.Playwright.CLI
-          export PATH="$PATH:$HOME/.dotnet/tools"
-          playwright install --with-deps chromium
+        run: pwsh ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
       - name: Full suite
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"

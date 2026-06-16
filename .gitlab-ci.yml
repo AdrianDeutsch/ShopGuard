@@ -23,10 +23,13 @@ default:
     paths: [.nuget]
 
 # Reusable script block: installs Playwright browsers incl. OS dependencies.
+# The CLI must run inside the E2E project directory so it can locate the
+# Playwright package; afterwards we return to the project root.
 .install-playwright: &install-playwright
+  - dotnet build ShopGuard/ShopGuard.E2ETests -c Release
   - dotnet tool install --global Microsoft.Playwright.CLI
   - export PATH="$PATH:$HOME/.dotnet/tools"
-  - playwright install --with-deps chromium
+  - cd ShopGuard/ShopGuard.E2ETests && playwright install --with-deps chromium && cd "$CI_PROJECT_DIR"
 
 # Reusable artifact definition for E2E jobs: screenshots, traces and JUnit results.
 .e2e-artifacts: &e2e-artifacts
