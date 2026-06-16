@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://gitlab.com/REPLACE_NAMESPACE/shopguard/-/pipelines"><img src="https://gitlab.com/REPLACE_NAMESPACE/shopguard/badges/main/pipeline.svg" alt="Pipeline"></a>
-  <a href="https://gitlab.com/REPLACE_NAMESPACE/shopguard/-/pipelines"><img src="https://gitlab.com/REPLACE_NAMESPACE/shopguard/badges/main/coverage.svg" alt="Coverage"></a>
+  <a href="https://github.com/AdrianDeutsch/Qa_Automation/actions/workflows/ci.yml"><img src="https://github.com/AdrianDeutsch/Qa_Automation/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <img src="https://img.shields.io/badge/coverage-99.6%25-brightgreen" alt="Coverage 99.6%">
   <img src="https://img.shields.io/badge/.NET-10.0_LTS-512BD4?logo=dotnet" alt=".NET 10">
   <img src="https://img.shields.io/badge/Reqnroll-3.3-2aa889" alt="Reqnroll">
   <img src="https://img.shields.io/badge/Playwright-1.60-2EAD33?logo=playwright" alt="Playwright">
@@ -74,22 +74,16 @@ liegt in `ShopGuard.Core` und ist vollständig unit-getestet — die E2E-Schicht
 
 ## 📸 Screenshots
 
-> Die Screenshots entstehen beim ersten Pipeline-Lauf; Dateinamen sind vorbereitet.
-
-<img src="docs/images/pipeline-green.png" width="700" alt="GitLab-Pipeline">
-<br><em>Grüne Pipeline mit allen Stages (build → unit → smoke → feature → regression → report)</em>
-
 <img src="docs/images/coverage-report.png" width="700" alt="Coverage-Report">
-<br><em>Coverage-Report: 99,6 % Line Coverage für ShopGuard.Core</em>
+<br><em>Coverage-Report (ReportGenerator): 99,6 % Line Coverage für ShopGuard.Core</em>
 
-<img src="docs/images/trace-viewer.png" width="700" alt="Playwright Trace Viewer">
-<br><em>Playwright-Trace-Viewer bei einem fehlgeschlagenen Checkout (DEFECT-003)</em>
+<img src="docs/images/pipeline-green.png" width="700" alt="GitHub Actions Pipeline">
+<br><em>Grüne CI-Pipeline (GitHub Actions): Unit → Smoke, Fail-Fast-Testpyramide</em>
 
-<img src="docs/images/test-report.png" width="700" alt="Testreport">
-<br><em>JUnit-Testreport in GitLab: 27 E2E-Szenarien</em>
-
-<img src="docs/images/defect-report.png" width="700" alt="Defect Report">
-<br><em>Defect Report nach Jira-Template (DEFECT-001: API antwortet 418)</em>
+> Weitere Live-Artefakte direkt im <a href="https://github.com/AdrianDeutsch/Qa_Automation/actions">Actions-Tab</a>:
+> Coverage-Summary im Job-Step-Summary, sowie Screenshots & Playwright-Traces als Job-Artefakte bei
+> fehlgeschlagenen E2E-Läufen (öffnen mit `playwright show-trace <trace.zip>`).
+> Defect Reports nach Jira-Template liegen unter [docs/defects/](docs/defects/).
 
 ---
 
@@ -97,7 +91,7 @@ liegt in `ShopGuard.Core` und ist vollständig unit-getestet — die E2E-Schicht
 
 1. **Repository klonen und bauen**
    ```bash
-   git clone <repo-url> && cd Qa_Automation
+   git clone https://github.com/AdrianDeutsch/Qa_Automation.git && cd Qa_Automation
    dotnet build ShopGuard
    ```
 2. **Playwright-Browser installieren** (einmalig)
@@ -169,26 +163,28 @@ Qa_Automation/
 │   ├── JIRA-BUG-TEMPLATE.md
 │   └── images/
 ├── FLAKY-TESTS.md               # Erkennung & Behandlung instabiler Tests
-└── .gitlab-ci.yml               # 6 Stages, tag-basierte Selektion, Artefakt-Upload
+├── .github/workflows/ci.yml     # Live-Pipeline (GitHub Actions), Fail-Fast-Testpyramide
+└── .gitlab-ci.yml               # Gleichwertige GitLab-Variante (Stages, Tags, Pages)
 ```
 
 ---
 
 ## 🔁 CI/CD-Pipeline
 
+Die Pipeline läuft live als **GitHub Actions** ([ci.yml](.github/workflows/ci.yml)) — die
+**[.gitlab-ci.yml](.gitlab-ci.yml)** ist als gleichwertige GitLab-Variante (Stages, Tags, GitLab Pages)
+beigelegt und sofort einsetzbar. Beide bilden dieselbe Fail-Fast-Testpyramide ab:
+
 <details>
 <summary><b>Stages & Trigger im Überblick</b> (Klick zum Aufklappen)</summary>
 
-| Stage | Trigger | Inhalt | Besonderheit |
+| Job / Stage | Trigger | Inhalt | Besonderheit |
 |---|---|---|---|
-| `build` | jeder Push | `dotnet build -c Release` | NuGet-Cache |
 | `unit` | jeder Push | 49 Unit-Tests + Coverage | **Fail Fast** — rot ⇒ kein Browserstart |
-| `smoke` | jeder Push | `--filter TestCategory=smoke` | `timeout: 5 minutes`, Retry 2× |
-| `feature` | Merge Request | alle `@ui`/`@api`/`@db`-Szenarien | Screenshots/Traces als Artefakte |
-| `regression` | nightly Schedule | kompletter Testsatz | inkl. Unit + E2E |
-| `report` | Default-Branch / nightly | Coverage-HTML → GitLab Pages | Cobertura-Report im MR-Diff |
-
-Komplette Konfiguration: [.gitlab-ci.yml](.gitlab-ci.yml)
+| `smoke` | jeder Push | `--filter TestCategory=smoke` | `needs: unit`, Timeout, Retry bei Flakiness |
+| `e2e` / `feature` | Pull / Merge Request | alle `@ui`/`@api`/`@db`-Szenarien | Screenshots/Traces als Artefakte |
+| `regression` | nightly Schedule (02:00 UTC) | kompletter Testsatz | inkl. Unit + E2E |
+| Coverage | jeder Push | Cobertura → Job-Summary (Actions) / Pages (GitLab) | ReportGenerator |
 
 </details>
 
