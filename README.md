@@ -175,10 +175,12 @@ the protection, the pipeline **hosts the shop itself**: [docker/toolshop.compose
 brings up the Toolshop's prebuilt images (Angular UI + Laravel API + MariaDB), seeds the database, and
 the UI tests run against `http://localhost:4200` via the `selfhosted` environment.
 
-The shop is served as a **production build** (the Vite dev server is too slow per fresh browser context
-on CI runners), which renders instantly. Because building it in-container takes ~15–20 minutes, this job
-runs **nightly and on demand** (`workflow_dispatch`) rather than on every push — the push pipeline stays
-green in ~1–2 minutes. Locally you can run the UI suite any time with the Quick-start commands above.
+Two CI-specific details make this reliable: the shop is served as a **production build** (the Vite dev
+server recompiles per request and is too slow on CI), and the job runs on a **native arm64 runner**
+(`ubuntu-24.04-arm`) because the Toolshop images are arm64 — on amd64 runners they fall back to slow QEMU
+emulation and the API times out. Because the in-container build takes time, this job runs **nightly and on
+demand** (`workflow_dispatch`) rather than on every push, so the push pipeline stays green in ~1–2 minutes.
+Locally you can run the UI suite any time with the Quick-start commands above.
 
 This is the same pattern you'd use for a real product: test against a disposable, seeded instance you
 control — deterministic data, no external flakiness, no third-party rate limits.

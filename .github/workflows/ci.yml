@@ -84,7 +84,9 @@ jobs:
     name: UI E2E (self-hosted Toolshop)
     needs: unit
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # The Toolshop images are arm64; on amd64 runners they run under slow QEMU
+    # emulation and the API times out. Native arm64 runners make them fast.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     env:
       SHOPGUARD_ENV: selfhosted

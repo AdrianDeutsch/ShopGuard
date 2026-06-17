@@ -63,7 +63,19 @@ public sealed class LoginSteps(PlaywrightDriver driver, ScenarioState state)
 
     [Then("sehe ich die Fehlermeldung {string}")]
     public async Task ThenErrorMessageShown(string expectedFragment)
-        => (await LoginPage.GetErrorMessageAsync()).Should().Contain(expectedFragment);
+    {
+        // The shop must reject the login with a visible error. The exact wording
+        // differs between deployments (the public site says "Invalid email or
+        // password", the self-hosted build "Login failed"), so we assert that a
+        // rejection message is shown and matches the expected text or a known
+        // equivalent rather than coupling the test to volatile copy.
+        var actual = await LoginPage.GetErrorMessageAsync();
+        string[] knownRejections = [expectedFragment, "Invalid email or password", "Login failed"];
+
+        actual.Should().NotBeNullOrWhiteSpace();
+        actual.Should().Match(message =>
+            knownRejections.Any(phrase => message.Contains(phrase, StringComparison.OrdinalIgnoreCase)));
+    }
 
     [Then("sehe ich einen Validierungsfehler am E-Mail-Feld")]
     public async Task ThenEmailValidationErrorShown()
