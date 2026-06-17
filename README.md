@@ -45,9 +45,10 @@ self-hosted instance of the shop — and the results are published as a clickabl
 
 ## ⭐ Highlights
 
-- **Full test pyramid, all green in cloud CI** — 49 unit tests, 16 API/DB scenarios, 11 UI scenarios.
-- **UI E2E runs in CI for real** — the shop is spun up via Docker and tested locally in the pipeline,
-  side-stepping the Cloudflare bot-wall on the public demo (no bot-evasion).
+- **Full test pyramid runs green in cloud CI** — 49 unit tests, 16 API/DB scenarios, 11 UI scenarios.
+- **UI E2E runs in the cloud, not just locally** — a nightly/on-demand CI job spins the shop up via
+  Docker, builds it, and runs the full Playwright suite against it, side-stepping the Cloudflare bot-wall
+  on the public demo (no bot-evasion). The fast push pipeline stays green in ~1–2 minutes.
 - **99.6 % line coverage** on the reusable core, enforced and reported every push.
 - **Clickable live documentation** (BDD scenarios + coverage) auto-deployed to GitHub Pages.
 - **Fail-fast pyramid**: unit tests gate everything; no browser starts if they are red.
@@ -59,7 +60,7 @@ self-hosted instance of the shop — and the results are published as a clickabl
 
 | Area | Status | Technology |
 |---|---|---|
-| ✅ UI E2E tests (11 scenarios) | green in CI | Playwright for .NET, Page Object Model |
+| ✅ UI E2E tests (11 scenarios) | green (nightly CI + local) | Playwright for .NET, Page Object Model |
 | ✅ API tests (14 scenarios) | green in CI | Typed `HttpClient` client against restful-booker |
 | ✅ Unit tests (49 tests, < 1 s) | green in CI | NUnit 4 + Moq, mocked `HttpMessageHandler` |
 | ✅ SQL validation (2 scenarios) | green in CI | SQLite + Dapper, ANSI-compatible schema |
@@ -171,6 +172,11 @@ the protection, the pipeline **hosts the shop itself**: [docker/toolshop.compose
 brings up the Toolshop's prebuilt images (Angular UI + Laravel API + MariaDB), seeds the database, and
 the UI tests run against `http://localhost:4200` via the `selfhosted` environment.
 
+The shop is served as a **production build** (the Vite dev server is too slow per fresh browser context
+on CI runners), which renders instantly. Because building it in-container takes ~15–20 minutes, this job
+runs **nightly and on demand** (`workflow_dispatch`) rather than on every push — the push pipeline stays
+green in ~1–2 minutes. Locally you can run the UI suite any time with the Quick-start commands above.
+
 This is the same pattern you'd use for a real product: test against a disposable, seeded instance you
 control — deterministic data, no external flakiness, no third-party rate limits.
 
@@ -218,7 +224,7 @@ The pipeline runs live on **GitHub Actions** ([ci.yml](.github/workflows/ci.yml)
 |---|---|---|---|
 | `unit` | every push | 49 unit tests + coverage | **fail-fast** — red ⇒ nothing else runs |
 | `api` | needs unit | `@api` + `@db` | restful-booker + SQLite, retry on flakiness |
-| `ui` | needs unit | `@ui` via self-hosted Toolshop | Docker compose + seed, Playwright traces |
+| `ui` | nightly + manual | `@ui` via self-hosted Toolshop | Docker compose + prod build (~15–20 min) |
 | `pages` | push to `main` | Living doc + coverage → GitHub Pages | published report |
 | `regression` (GitLab) | nightly | full set | scheduled |
 

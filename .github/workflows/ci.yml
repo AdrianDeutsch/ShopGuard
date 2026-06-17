@@ -77,11 +77,15 @@ jobs:
           path: TestResults/
 
   # UI E2E against a self-hosted Toolshop (avoids Cloudflare on the public site).
+  # This job builds the shop's production bundle in-container (~15-20 min total with
+  # image pull + build), so it runs nightly and on demand rather than on every push —
+  # keeping the push pipeline fast while still exercising the full UI suite in the cloud.
   ui:
     name: UI E2E (self-hosted Toolshop)
     needs: unit
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       SHOPGUARD_ENV: selfhosted
     steps:
