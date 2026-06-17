@@ -98,6 +98,9 @@ lives in `ShopGuard.Core` and is fully unit-tested — the E2E layer stays thin.
 **▶ Live report (GitHub Pages):** https://adriandeutsch.github.io/Qa_Automation/ — browsable BDD
 living documentation + the full coverage report, refreshed on every push to `main`.
 
+<img src="docs/images/live-report.png" width="700" alt="Live report landing page on GitHub Pages">
+<br><em>Live report hub on GitHub Pages: Living Documentation (BDD scenarios) + coverage</em>
+
 <img src="docs/images/coverage-report.png" width="700" alt="Coverage report">
 <br><em>Coverage report (ReportGenerator): 99.6 % line coverage for ShopGuard.Core</em>
 
