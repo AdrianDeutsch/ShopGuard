@@ -3,9 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AdrianDeutsch/Qa_Automation/actions/workflows/ci.yml"><img src="https://github.com/AdrianDeutsch/Qa_Automation/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/AdrianDeutsch/ShopGuard/actions/workflows/ci.yml"><img src="https://github.com/AdrianDeutsch/ShopGuard/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/coverage-99.6%25-brightgreen" alt="Coverage 99.6%">
-  <a href="https://adriandeutsch.github.io/Qa_Automation/"><img src="https://img.shields.io/badge/live%20report-Pages-blue?logo=github" alt="Live report"></a>
+  <a href="https://adriandeutsch.github.io/ShopGuard/"><img src="https://img.shields.io/badge/live%20report-Pages-blue?logo=github" alt="Live report"></a>
   <img src="https://img.shields.io/badge/.NET-10.0_LTS-512BD4?logo=dotnet" alt=".NET 10">
   <img src="https://img.shields.io/badge/Reqnroll-3.3-2aa889" alt="Reqnroll">
   <img src="https://img.shields.io/badge/Playwright-1.60-2EAD33?logo=playwright" alt="Playwright">
@@ -21,7 +21,7 @@
 It combines Gherkin scenarios (Reqnroll) with Playwright UI tests, a typed API client and SQL database
 validation. Every layer runs **green in CI** — including the full UI suite, executed against a
 self-hosted instance of the shop — and the results are published as a clickable
-[**live report**](https://adriandeutsch.github.io/Qa_Automation/).
+[**live report**](https://adriandeutsch.github.io/ShopGuard/).
 
 > 🇩🇪 The Gherkin scenarios are written in German (the project's domain language); all code and comments are in English.
 
@@ -97,7 +97,7 @@ lives in `ShopGuard.Core` and is fully unit-tested — the E2E layer stays thin.
 
 ## 📊 Live reports & screenshots
 
-**▶ Live report (GitHub Pages):** https://adriandeutsch.github.io/Qa_Automation/ — browsable BDD
+**▶ Live report (GitHub Pages):** https://adriandeutsch.github.io/ShopGuard/ — browsable BDD
 living documentation + the full coverage report, refreshed on every push to `main`.
 
 <img src="docs/images/live-report.png" width="700" alt="Live report landing page on GitHub Pages">
@@ -119,7 +119,7 @@ living documentation + the full coverage report, refreshed on every push to `mai
 
 1. **Clone & build**
    ```bash
-   git clone https://github.com/AdrianDeutsch/Qa_Automation.git && cd Qa_Automation
+   git clone https://github.com/AdrianDeutsch/ShopGuard.git && cd ShopGuard
    dotnet build ShopGuard
    ```
 2. **Install the Playwright browser** (once)
@@ -204,7 +204,7 @@ deterministic data, no external flakiness, no third-party rate limits.
 ## 📁 Project structure
 
 ```
-Qa_Automation/
+ShopGuard/
 ├── ShopGuard/
 │   ├── ShopGuard.Core/          # Reusable: ApiClient, helpers, models, OrderRepository
 │   ├── ShopGuard.UnitTests/     # 49 NUnit tests, Moq-mocked HttpMessageHandler
