@@ -43,7 +43,16 @@ services:
 
   angular-ui:
     image: testsmith/practice-software-testing-sprint5-ui
-    command: bash -c "ng serve --host 0.0.0.0 --port 4200"
+    # Point the app at the local API, build a production bundle, and serve it as
+    # static files with SPA fallback. A production build renders instantly — unlike
+    # the Vite dev server (ng serve), which recompiles modules on demand and is too
+    # slow/unreliable per fresh browser context on CI runners.
+    command: >
+      bash -lc "
+        sed -i \"s#apiUrl: '[^']*'#apiUrl: 'http://localhost:8091'#\" src/environments/environment.prod.ts &&
+        ng build --configuration production &&
+        npx -y serve -s dist/toolshop -l 4200
+      "
     ports:
       - "4200:4200"
     depends_on:
