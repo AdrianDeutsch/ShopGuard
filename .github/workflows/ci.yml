@@ -1,28 +1,27 @@
 name: CI
 
-# Mirrors the GitLab pipeline (.gitlab-ci.yml) as GitHub Actions jobs.
-# Fail-fast test pyramid: unit (always, blocks everything) -> API smoke (push) ->
-# API + DB e2e (pull request) -> regression (nightly schedule).
+# Fail-fast test pyramid:
+#   unit (fast, blocks everything)
+#     -> api  (REST + DB, against restful-booker + SQLite)
+#     -> ui   (Playwright against a self-hosted Toolshop, see below)
+#   -> pages (publish Living Documentation + coverage to GitHub Pages)
 #
-# NOTE on UI tests: the public demo shop (practicesoftwaretesting.com) is protected
-# by a Cloudflare bot challenge that triggers for data-center IPs like GitHub's hosted
-# runners. The @ui scenarios therefore run locally / on self-hosted runners with a
-# residential egress IP (see README) and are excluded from the hosted jobs below via
-# "TestCategory!=ui". Evading the bot protection is intentionally out of scope.
+# The public demo shop serves a Cloudflare bot challenge to data-center IPs, so the
+# UI job spins up the Toolshop itself via Docker (docker/toolshop.compose.yml) and
+# tests against http://localhost:4200 — full UI E2E runs in hosted CI this way.
 
 on:
   push:
     branches: [main]
   pull_request:
   schedule:
-    - cron: "0 2 * * *" # nightly 02:00 UTC -> full regression (minus UI)
+    - cron: "0 2 * * *" # nightly full run
   workflow_dispatch:
 
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
   HEADLESS: "true"
-  SHOPGUARD_ENV: "local"
 
 jobs:
   # Fast feedback: unit tests + coverage. If this is red, nothing else runs.
@@ -34,66 +33,27 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
-      - name: Build
-        run: dotnet build ShopGuard -c Release
+      - run: dotnet build ShopGuard -c Release
       - name: Unit tests + coverage
         run: |
           dotnet test ShopGuard/ShopGuard.UnitTests -c Release --no-build \
             --collect:"XPlat Code Coverage" \
             --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/unit.junit.xml" \
             --results-directory TestResults
-      - name: Coverage report
+      - name: Coverage summary
         run: |
           dotnet tool install --global dotnet-reportgenerator-globaltool
           export PATH="$PATH:$HOME/.dotnet/tools"
-          reportgenerator \
-            -reports:"TestResults/**/coverage.cobertura.xml" \
-            -targetdir:coverage \
-            -reporttypes:"Html;TextSummary;MarkdownSummaryGithub" \
+          reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" \
+            -targetdir:coverage -reporttypes:"TextSummary;MarkdownSummaryGithub" \
             -assemblyfilters:"+ShopGuard.Core"
           cat coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
           grep -E "Line coverage|Branch coverage" coverage/Summary.txt
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-report
-          path: coverage/
 
-  # API smoke on every push (the @ui smoke scenarios run locally, see note above).
-  smoke:
-    name: API Smoke (@smoke)
+  # REST API + SQL database scenarios (no browser needed).
+  api:
+    name: API & DB (@api, @db)
     needs: unit
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-      - name: Smoke tests (API)
-        run: |
-          # restful-booker can be slow; retry the suite up to 3 times before failing.
-          for attempt in 1 2 3; do
-            dotnet test ShopGuard/ShopGuard.E2ETests -c Release \
-              --filter "TestCategory=smoke&TestCategory!=ui" \
-              --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/smoke.junit.xml" \
-              && exit 0
-            echo "attempt $attempt failed"
-          done
-          exit 1
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: smoke-results
-          path: TestResults/
-
-  # Full API + DB suite on pull requests (maps to the GitLab "feature" stage).
-  e2e:
-    name: E2E (api|db)
-    needs: unit
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,40 +62,120 @@ jobs:
           dotnet-version: "10.0.x"
       - name: API + DB tests
         run: |
+          # restful-booker can be slow; retry the suite up to 3 times.
           for attempt in 1 2 3; do
             dotnet test ShopGuard/ShopGuard.E2ETests -c Release \
               --filter "TestCategory=api|TestCategory=db" \
-              --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/e2e.junit.xml" \
-              && exit 0
+              --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/api.junit.xml" && exit 0
             echo "attempt $attempt failed"
           done
           exit 1
-      - name: Upload results
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-results
+          name: api-results
           path: TestResults/
 
-  # Complete test set nightly, minus the Cloudflare-blocked UI scenarios.
-  regression:
-    name: Regression (no UI)
+  # UI E2E against a self-hosted Toolshop (avoids Cloudflare on the public site).
+  ui:
+    name: UI E2E (self-hosted Toolshop)
     needs: unit
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SHOPGUARD_ENV: selfhosted
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
-      - name: Full suite (excluding @ui)
+      - name: Start Toolshop & seed database
         run: |
-          dotnet test ShopGuard -c Release \
-            --filter "TestCategory!=ui" \
-            --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/regression.junit.xml"
-      - name: Upload results
-        uses: actions/upload-artifact@v4
+          docker compose -f docker/toolshop.compose.yml up -d
+          echo "waiting for API..."
+          for i in $(seq 1 60); do curl -fsS http://localhost:8091/status >/dev/null 2>&1 && break || sleep 5; done
+          echo "seeding database..."
+          for i in $(seq 1 10); do docker compose -f docker/toolshop.compose.yml exec -T laravel-api php artisan migrate:fresh --seed --force && break || sleep 5; done
+          echo "waiting for seeded products..."
+          for i in $(seq 1 30); do curl -fsS http://localhost:8091/products >/dev/null 2>&1 && break || sleep 5; done
+          echo "waiting for Angular UI (ng serve compile)..."
+          for i in $(seq 1 90); do curl -fsS http://localhost:4200 >/dev/null 2>&1 && break || sleep 5; done
+      - name: Build & install Playwright (Chromium)
+        run: |
+          dotnet build ShopGuard/ShopGuard.E2ETests -c Release
+          pwsh ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+      - name: UI tests
+        run: |
+          dotnet test ShopGuard/ShopGuard.E2ETests -c Release --no-build \
+            --filter "TestCategory=ui" \
+            --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/ui.junit.xml"
+      - name: Toolshop logs (on failure)
+        if: failure()
+        run: docker compose -f docker/toolshop.compose.yml logs --tail 100
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: regression-results
-          path: TestResults/
+          name: ui-artifacts
+          path: |
+            ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/artifacts/
+            TestResults/
+
+  # Publish Living Documentation (BDD scenarios) + coverage report to GitHub Pages.
+  pages:
+    name: Publish report (Pages)
+    needs: [unit, api, ui]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Build site (Living Doc + coverage)
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          mkdir -p site
+          # Coverage HTML
+          dotnet test ShopGuard/ShopGuard.UnitTests -c Release \
+            --collect:"XPlat Code Coverage" --results-directory cov
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          reportgenerator -reports:"cov/**/coverage.cobertura.xml" \
+            -targetdir:site/coverage -reporttypes:Html -assemblyfilters:"+ShopGuard.Core"
+          # Living Documentation from the Gherkin feature folder
+          dotnet tool install --global SpecFlow.Plus.LivingDoc.CLI
+          livingdoc feature-folder ShopGuard/ShopGuard.E2ETests/Features -o site/living-doc.html
+          # Landing page
+          cat > site/index.html <<'HTML'
+          <!doctype html><html lang="en"><meta charset="utf-8">
+          <title>ShopGuard — Reports</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body{font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:780px;margin:3rem auto;padding:0 1rem;background:#0f172a;color:#e2e8f0}
+            h1{font-size:1.8rem} a{color:#38bdf8}
+            .card{display:block;padding:1.2rem 1.4rem;margin:1rem 0;border:1px solid #1e3a5f;border-radius:12px;background:#13203b;text-decoration:none;color:inherit}
+            .card:hover{border-color:#38bdf8} .card h2{margin:0 0 .3rem;font-size:1.15rem;color:#38bdf8}
+            .muted{color:#94a3b8;font-size:.92rem}
+          </style>
+          <h1>🛡️ ShopGuard — Live Reports</h1>
+          <p class="muted">BDD test-automation framework · .NET 10 · Reqnroll · Playwright</p>
+          <a class="card" href="living-doc.html"><h2>📋 Living Documentation</h2>
+            <span class="muted">All Gherkin features &amp; scenarios (UI / API / DB), rendered from the feature folder.</span></a>
+          <a class="card" href="coverage/index.html"><h2>📊 Code Coverage</h2>
+            <span class="muted">ShopGuard.Core line/branch coverage (ReportGenerator).</span></a>
+          <p class="muted">Generated by GitHub Actions · <a href="https://github.com/AdrianDeutsch/Qa_Automation">source on GitHub</a></p>
+          </html>
+          HTML
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
