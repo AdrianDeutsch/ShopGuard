@@ -1,0 +1,62 @@
+name: UI (self-hosted Toolshop)
+
+# Runs the UI and database scenarios on a hosted runner, against the Toolshop from
+# docker/toolshop.compose.yml. API and UI images are amd64 and run natively on the runner;
+# the nginx image is arm64 and runs under QEMU.
+#
+# Manual trigger only. The same scenarios are gated locally by .githooks/pre-push. Starting
+# the shop takes several minutes, because the Angular app is built inside the container;
+# that is too slow for the push pipeline in ci.yml.
+
+on:
+  workflow_dispatch:
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  ui:
+    name: UI + database (@ui)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SHOPGUARD_ENV: selfhosted
+      HEADLESS: "true"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Register QEMU for the arm64 container
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      - name: Start the Toolshop
+        run: scripts/start-toolshop.sh
+
+      - name: Build and install Chromium
+        run: |
+          dotnet build ShopGuard/ShopGuard.E2ETests -c Release
+          pwsh ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: UI and database scenarios
+        run: |
+          dotnet test ShopGuard/ShopGuard.E2ETests -c Release --no-build \
+            --filter "TestCategory=ui&TestCategory!=wip" \
+            --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/ui.junit.xml"
+
+      - name: Toolshop logs
+        if: failure()
+        run: docker compose -f docker/toolshop.compose.yml logs --tail 200
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ui-results
+          path: |
+            TestResults/
+            ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/reqnroll-report.html
+            ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/artifacts/

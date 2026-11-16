@@ -18,13 +18,6 @@ public sealed class SearchSteps(PlaywrightDriver driver)
     public Task WhenSearchFor(string searchTerm)
         => SearchResultsPage.SearchAsync(searchTerm);
 
-    [When("ich nach {string} suche und das Produkt öffne")]
-    public async Task WhenSearchAndOpenProduct(string productTitle)
-    {
-        await SearchResultsPage.SearchAsync(productTitle);
-        await SearchResultsPage.OpenProductAsync(productTitle);
-    }
-
     [Then("sehe ich mindestens {int} Suchergebnis(se)")]
     public async Task ThenAtLeastResults(int minimumCount)
         => (await SearchResultsPage.GetProductTitlesAsync()).Should().HaveCountGreaterThanOrEqualTo(minimumCount);

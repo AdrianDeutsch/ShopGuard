@@ -1,3 +1,5 @@
+using ShopGuard.Core.Database;
+using ShopGuard.Core.Helpers;
 using ShopGuard.Core.Models;
 
 namespace ShopGuard.E2ETests.Support;
@@ -8,20 +10,17 @@ namespace ShopGuard.E2ETests.Support;
 /// </summary>
 public sealed class ScenarioState
 {
-    // UI state
-    public string? RegisteredEmail { get; set; }
-    public string? RegisteredPassword { get; set; }
-    public decimal ExpectedCartTotal { get; set; }
-    public readonly List<decimal> AddedProductPrices = [];
+    // Shop (UI + database) state
+    public CustomerAccount? Customer { get; set; }
+    public SubmittedRegistration? Registration { get; set; }
+    public List<CartItem> CartItems { get; } = [];
+    public string? InvoiceNumber { get; set; }
+    public Invoice? PersistedInvoice { get; set; }
 
-    // API state
+    // Booking API state
     public Booking? RequestBooking { get; set; }
     public BookingCreatedResponse? CreatedBooking { get; set; }
     public Booking? FetchedBooking { get; set; }
     public string? AuthToken { get; set; }
     public int LastStatusCode { get; set; }
-
-    // Database state
-    public string? OrderNumber { get; set; }
-    public string? CustomerEmail { get; set; }
 }

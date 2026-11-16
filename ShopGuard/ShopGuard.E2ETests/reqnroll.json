@@ -6,5 +6,8 @@
   },
   "trace": {
     "stepDefinitionSkeletonStyle": "CucumberExpressionAttribute"
+  },
+  "formatters": {
+    "html": { "outputFilePath": "reqnroll-report.html" }
   }
 }

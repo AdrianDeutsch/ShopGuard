@@ -14,7 +14,6 @@ public abstract class BasePage(IPage page)
 
     protected static string BaseUrl => TestConfiguration.Settings.ShopBaseUrl.TrimEnd('/');
 
-    private ILocator CartQtyBadge => Page.Locator("[data-test='cart-quantity']");
     private ILocator SearchBox => Page.Locator("[data-test='search-query']");
     private ILocator SearchButton => Page.Locator("[data-test='search-submit']");
     private ILocator UserNavMenu => Page.Locator("[data-test='nav-menu']");
@@ -22,13 +21,6 @@ public abstract class BasePage(IPage page)
     protected async Task NavigateAsync(string relativePath)
     {
         await Page.GotoAsync($"{BaseUrl}/{relativePath.TrimStart('/')}");
-    }
-
-    /// <summary>Reads the item count from the header cart badge.</summary>
-    public async Task<int> GetCartItemCountAsync()
-    {
-        await CartQtyBadge.WaitForAsync();
-        return int.Parse((await CartQtyBadge.InnerTextAsync()).Trim());
     }
 
     /// <summary>Runs a search via the home page search box.</summary>

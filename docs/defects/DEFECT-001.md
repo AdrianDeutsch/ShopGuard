@@ -8,7 +8,7 @@
 | **Priority** | High |
 | **Environment** | restful-booker.herokuapp.com (Prod-Demo), .NET 10 HttpClient, getestet am 2026-06-12 |
 | **Affected Component** | API |
-| **Found in** | E2E-Stage `smoke`, Szenario "Neue Buchung anlegen" |
+| **Found in** | API-Szenario "Neue Buchung anlegen" (`@smoke @api`) |
 
 ## Steps to Reproduce
 
@@ -35,7 +35,7 @@ und für Clients nicht interpretierbar.
 ## Attachments
 
 - [x] Request/Response-Log (siehe curl oben; mit `Accept: application/json` antwortet derselbe Request mit 200)
-- [x] CI-Job: E2E-Lauf vom 2026-06-12, 10 von 16 API-Szenarien rot
+- [x] Testlauf vom 2026-06-12: alle Szenarien rot, die eine Buchung anlegen
 
 ## Root-Cause-Klassifikation
 
@@ -49,4 +49,4 @@ und für Clients nicht interpretierbar.
 
 | Datum | Version/Commit | Ergebnis | Tester |
 |---|---|---|---|
-| 2026-06-12 | Workaround im Client | ✅ Alle 16 API-/DB-Szenarien grün | ShopGuard CI |
+| 2026-06-12 | Workaround im Client | ✅ Alle API-Szenarien grün | ShopGuard CI |

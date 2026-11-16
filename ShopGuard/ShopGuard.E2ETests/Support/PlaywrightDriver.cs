@@ -16,6 +16,9 @@ public sealed class PlaywrightDriver : IAsyncDisposable
     private IBrowserContext? _context;
     private IPage? _page;
 
+    /// <summary>False when the scenario ended before a browser context was created.</summary>
+    public bool IsInitialized => _page is not null;
+
     /// <summary>The page of the current scenario. Only valid after <see cref="InitAsync"/>.</summary>
     public IPage Page => _page ?? throw new InvalidOperationException(
         "PlaywrightDriver is not initialized. Did the scenario miss the @ui tag?");
@@ -70,6 +73,19 @@ public sealed class PlaywrightDriver : IAsyncDisposable
         {
             await _context.Tracing.StopAsync();
         }
+    }
+
+    /// <summary>Closes the browser all scenarios shared. Called once, after the last scenario.</summary>
+    public static async Task ShutdownAsync()
+    {
+        if (_browser is not null)
+        {
+            await _browser.DisposeAsync();
+            _browser = null;
+        }
+
+        _playwright?.Dispose();
+        _playwright = null;
     }
 
     public async ValueTask DisposeAsync()

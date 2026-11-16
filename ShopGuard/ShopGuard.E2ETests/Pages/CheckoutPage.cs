@@ -23,20 +23,11 @@ public sealed class CheckoutPage(IPage page) : BasePage(page)
     }
 
     /// <summary>
-    /// Completes the billing address step. The form is prefilled from the customer
-    /// profile except the house number, which checkout requires explicitly.
+    /// Confirms the billing address step. The form is prefilled from the customer profile and
+    /// nothing is typed here on purpose: the button stays disabled while a required field is
+    /// empty, so an incomplete prefill fails the scenario instead of being repaired silently.
     /// </summary>
-    public async Task CompleteBillingAddressAsync(string houseNumber)
-    {
-        var houseNumberInput = Page.Locator("input[data-test='house_number']");
-        await houseNumberInput.WaitForAsync();
-        if (string.IsNullOrWhiteSpace(await houseNumberInput.InputValueAsync()))
-        {
-            await houseNumberInput.FillAsync(houseNumber);
-        }
-
-        await ProceedFromAddressButton.ClickAsync();
-    }
+    public Task ConfirmBillingAddressAsync() => ProceedFromAddressButton.ClickAsync();
 
     /// <summary>Pays via "Cash on Delivery" so no real payment data is required.</summary>
     public async Task PayWithCashOnDeliveryAsync()

@@ -3,18 +3,18 @@ using Microsoft.Extensions.Configuration;
 namespace ShopGuard.Core.Configuration;
 
 /// <summary>
-/// Loads <see cref="TestSettings"/> from a JSON file and environment variables.
-/// Precedence (highest wins): SHOPGUARD_* env vars > environment section > root section.
+/// Loads <see cref="TestSettings"/> in three layers. Each layer only replaces the values it
+/// defines; the highest one wins:
+/// <list type="number">
+/// <item>section "TestSettings" of the JSON file (defaults)</item>
+/// <item>section "Environments:{name}" of the JSON file (per target environment)</item>
+/// <item>environment variables SHOPGUARD_{Property}, e.g. SHOPGUARD_ApiPassword (CI secrets)</item>
+/// </list>
 /// </summary>
 public static class SettingsLoader
 {
     public const string EnvVarPrefix = "SHOPGUARD_";
 
-    /// <summary>
-    /// Loads settings for the given environment (e.g. "local", "staging").
-    /// The JSON file contains a root "TestSettings" section plus optional
-    /// per-environment override sections ("Environments:{name}").
-    /// </summary>
     public static TestSettings Load(string jsonPath, string environment = "local")
     {
         if (!File.Exists(jsonPath))
@@ -22,39 +22,43 @@ public static class SettingsLoader
             throw new FileNotFoundException($"Test configuration not found: {jsonPath}", jsonPath);
         }
 
-        var configuration = new ConfigurationBuilder()
-            .AddJsonFile(jsonPath, optional: false)
-            .AddEnvironmentVariables(EnvVarPrefix)
-            .Build();
-
-        var settings = configuration.GetSection("TestSettings").Get<TestSettings>()
+        var file = new ConfigurationBuilder().AddJsonFile(jsonPath, optional: false).Build();
+        var settings = file.GetSection("TestSettings").Get<TestSettings>()
             ?? throw new InvalidOperationException("Section 'TestSettings' is missing or invalid.");
 
-        // Apply per-environment overrides on top of the defaults.
-        var overrides = configuration.GetSection($"Environments:{environment}");
-        if (overrides.Exists())
+        file.GetSection($"Environments:{environment}").Bind(settings);
+        new ConfigurationBuilder().AddEnvironmentVariables(EnvVarPrefix).Build().Bind(settings);
+
+        // HEADLESS=false is the conventional switch to watch the browser; it wins over everything.
+        if (bool.TryParse(Environment.GetEnvironmentVariable("HEADLESS"), out var headless))
         {
-            settings = new TestSettings
-            {
-                ShopBaseUrl = overrides["ShopBaseUrl"] ?? settings.ShopBaseUrl,
-                ApiBaseUrl = overrides["ApiBaseUrl"] ?? settings.ApiBaseUrl,
-                ApiUsername = overrides["ApiUsername"] ?? settings.ApiUsername,
-                ApiPassword = overrides["ApiPassword"] ?? settings.ApiPassword,
-                DbConnectionString = overrides["DbConnectionString"] ?? settings.DbConnectionString,
-                Headless = bool.TryParse(overrides["Headless"], out var headless) ? headless : settings.Headless,
-                DefaultTimeoutMs = int.TryParse(overrides["DefaultTimeoutMs"], out var timeout)
-                    ? timeout
-                    : settings.DefaultTimeoutMs,
-            };
+            settings = settings with { Headless = headless };
         }
 
-        // HEADLESS=false (CI convenience variable) wins over everything else.
-        var headlessEnv = Environment.GetEnvironmentVariable("HEADLESS");
-        if (bool.TryParse(headlessEnv, out var headlessOverride))
-        {
-            settings = settings with { Headless = headlessOverride };
-        }
-
+        EnsureComplete(settings);
         return settings;
+    }
+
+    // "required" is only checked by the compiler; a key missing in the JSON file would otherwise
+    // surface much later as a NullReferenceException somewhere in a test.
+    private static void EnsureComplete(TestSettings settings)
+    {
+        var missing = new (string Name, string? Value)[]
+            {
+                (nameof(TestSettings.ShopBaseUrl), settings.ShopBaseUrl),
+                (nameof(TestSettings.ShopApiBaseUrl), settings.ShopApiBaseUrl),
+                (nameof(TestSettings.ApiBaseUrl), settings.ApiBaseUrl),
+                (nameof(TestSettings.ApiUsername), settings.ApiUsername),
+                (nameof(TestSettings.ApiPassword), settings.ApiPassword),
+            }
+            .Where(entry => string.IsNullOrWhiteSpace(entry.Value))
+            .Select(entry => entry.Name)
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Test configuration is incomplete. Missing: {string.Join(", ", missing)}.");
+        }
     }
 }

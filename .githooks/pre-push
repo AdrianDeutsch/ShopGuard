@@ -1,58 +1,38 @@
 #!/usr/bin/env bash
 #
-# Local quality gate: run the Playwright UI E2E suite before every push.
+# Local quality gate: run the Playwright UI scenarios and the checks against the shop's
+# database before every push.
 #
-# Why a git hook instead of cloud CI? The UI suite needs the demo shop running,
-# but the public site is Cloudflare-protected and the self-hostable Toolshop
-# images are arm64-only (they fail with "exec format error" on the amd64 hosted
-# runners). The tests run reliably on a developer machine (arm64, native), so we
-# gate them here. The hosted CI keeps running unit + API + DB + report.
+# Why a git hook instead of the push pipeline? The scenarios need the demo shop running.
+# The public site is Cloudflare-protected, and the self-hosted stack is heavy for a hosted
+# runner: it builds the Angular app on start and mixes amd64 and arm64 images. On a developer
+# machine with Docker Desktop it is up in minutes and stays up, so the gate lives here. The
+# hosted CI keeps running unit + integration + API + reports.
 #
 # Bypass when you really need to (e.g. no Docker at hand):
 #   SKIP_UI_TESTS=1 git push
 set -euo pipefail
 
 if [ "${SKIP_UI_TESTS:-0}" = "1" ]; then
-  echo "pre-push: SKIP_UI_TESTS=1 set — skipping UI E2E."
+  echo "pre-push: SKIP_UI_TESTS=1 set — skipping the UI gate."
   exit 0
 fi
 
 ROOT="$(git rev-parse --show-toplevel)"
-COMPOSE="$ROOT/docker/toolshop.compose.yml"
 
 if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
-  echo "pre-push: Docker is not available — cannot run the UI E2E gate."
+  echo "pre-push: Docker is not available — cannot run the UI gate."
   echo "          Start Docker, or bypass once with: SKIP_UI_TESTS=1 git push"
   exit 1
 fi
 
-echo "pre-push: starting the self-hosted Toolshop (reused if already up)..."
-docker compose -f "$COMPOSE" up -d >/dev/null
+"$ROOT/scripts/start-toolshop.sh"
 
-echo "pre-push: waiting for the API..."
-for _ in $(seq 1 60); do curl -fsS http://localhost:8091/status >/dev/null 2>&1 && break || sleep 5; done
-
-# Seed until the catalog actually contains products. The DB may not be ready the
-# instant the API answers (especially on a freshly created stack), so retry —
-# '"data":[{' requires at least one product, not just an empty "data":[] array.
-has_products() { curl -fsS http://localhost:8091/products 2>/dev/null | grep -q '"data":\[{'; }
-echo "pre-push: seeding the database..."
-for _ in $(seq 1 6); do
-  has_products && break
-  docker compose -f "$COMPOSE" exec -T laravel-api php artisan migrate:fresh --seed --force >/dev/null 2>&1 || true
-  sleep 5
-done
-if ! has_products; then
-  echo "pre-push: the Toolshop database has no products after seeding — aborting."
-  echo "          Inspect with: docker compose -f docker/toolshop.compose.yml logs"
-  exit 1
-fi
-
-echo "pre-push: waiting for the UI..."
-for _ in $(seq 1 90); do curl -fsS http://localhost:4200 >/dev/null 2>&1 && break || sleep 5; done
-
-echo "pre-push: running UI E2E (@ui) against the local Toolshop..."
+# @wip marks scenarios that describe a known, still open product defect (see docs/defects).
+# They are expected to fail and must not block a push.
+echo "pre-push: running UI + database scenarios (@ui, without @wip) against the local Toolshop..."
 SHOPGUARD_ENV=selfhosted HEADLESS=true \
-  dotnet test "$ROOT/ShopGuard/ShopGuard.E2ETests" -c Debug --filter "TestCategory=ui"
+  dotnet test "$ROOT/ShopGuard/ShopGuard.E2ETests" -c Debug --filter "TestCategory=ui&TestCategory!=wip"
 
-echo "pre-push: UI E2E passed — proceeding with push."
+echo "pre-push: UI + database scenarios passed — proceeding with push."
+echo "          Report: ShopGuard/ShopGuard.E2ETests/bin/Debug/net10.0/reqnroll-report.html"
