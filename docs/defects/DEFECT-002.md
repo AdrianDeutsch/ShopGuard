@@ -8,7 +8,7 @@
 | **Priority** | Medium |
 | **Environment** | restful-booker.herokuapp.com (Prod-Demo), getestet am 2026-06-12 |
 | **Affected Component** | API / Auth |
-| **Found in** | E2E-Stage `feature`, Szenario "Auth-Token mit falschen Zugangsdaten wird abgelehnt" |
+| **Found in** | API-Szenario "Auth-Token mit falschen Zugangsdaten wird abgelehnt" (`@api @regression`) |
 
 ## Steps to Reproduce
 

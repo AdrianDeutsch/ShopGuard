@@ -2,7 +2,7 @@ import { Locator, Page } from '@playwright/test';
 
 /**
  * Combined page object for catalog search, product detail and cart —
- * the TypeScript port keeps it intentionally compact (three scenarios only).
+ * the TypeScript port keeps it intentionally compact (four tests only).
  */
 export class ShopPage {
   readonly productTitles: Locator;
