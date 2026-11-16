@@ -1,84 +1,125 @@
 name: CI
 
-# Fail-fast test pyramid (hosted CI):
-#   unit (fast, blocks everything)
-#     -> api  (REST + DB, against restful-booker + SQLite)
-#   -> pages (publish Living Documentation + coverage to GitHub Pages)
+# Fail-fast test pyramid on hosted runners:
+#   unit   unit tests + integration tests (real MariaDB in a container) + coverage gate
+#   api    REST scenarios against restful-booker, with an execution report
+#   pages  publishes test report, living documentation and coverage to GitHub Pages
 #
-# The Playwright UI E2E suite is NOT run here: the public demo shop is
-# Cloudflare-protected and the self-hostable Toolshop images are arm64-only
-# ("exec format error" on the amd64 hosted runners). It is gated locally instead,
-# via the .githooks/pre-push hook against a self-hosted Toolshop (see README).
+# The Playwright UI scenarios and the checks against the shop's own database are NOT run
+# here: the public demo shop sits behind a Cloudflare bot challenge, and the self-hosted
+# Toolshop needs several minutes to start. They are gated locally instead, by
+# .githooks/pre-push against a self-hosted Toolshop, and can be run on a hosted runner on
+# demand with ui.yml (see README).
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Mondays 05:00 UTC. The API under test belongs to a third party and changes without a
+    # commit in this repository; the weekly run notices that.
+    - cron: "0 5 * * 1"
 
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
-  HEADLESS: "true"
+  DOTNET_NOLOGO: "1"
+  # Minimum line coverage of ShopGuard.Core. The build fails below it.
+  COVERAGE_THRESHOLD: "90"
 
 jobs:
-  # Fast feedback: unit tests + coverage. If this is red, nothing else runs.
+  # Fast feedback. If this is red, nothing else runs.
   unit:
-    name: Unit & Coverage
+    name: Unit, integration & coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
       - run: dotnet build ShopGuard -c Release
-      - name: Unit tests + coverage
+
+      - name: Unit tests
         run: |
           dotnet test ShopGuard/ShopGuard.UnitTests -c Release --no-build \
             --collect:"XPlat Code Coverage" \
             --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/unit.junit.xml" \
             --results-directory TestResults
-      - name: Coverage summary
+
+      # Testcontainers starts a throw-away MariaDB; Docker is preinstalled on the runner.
+      - name: Integration tests (MariaDB via Testcontainers)
+        run: |
+          dotnet test ShopGuard/ShopGuard.IntegrationTests -c Release --no-build \
+            --collect:"XPlat Code Coverage" \
+            --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/integration.junit.xml" \
+            --results-directory TestResults
+
+      - name: Coverage report and gate
         run: |
           dotnet tool install --global dotnet-reportgenerator-globaltool
           export PATH="$PATH:$HOME/.dotnet/tools"
+          # Both test projects cover the same assembly; ReportGenerator merges their reports.
           reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" \
-            -targetdir:coverage -reporttypes:"TextSummary;MarkdownSummaryGithub" \
+            -targetdir:coverage -reporttypes:"Html;Badges;TextSummary;MarkdownSummaryGithub" \
             -assemblyfilters:"+ShopGuard.Core"
           cat coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
-          grep -E "Line coverage|Branch coverage" coverage/Summary.txt
+          line=$(grep -m1 "Line coverage" coverage/Summary.txt | grep -oE "[0-9]+(\.[0-9]+)?")
+          echo "Line coverage: ${line}% (minimum: ${COVERAGE_THRESHOLD}%)"
+          awk -v actual="$line" -v minimum="$COVERAGE_THRESHOLD" 'BEGIN { exit (actual + 0 < minimum + 0) }' \
+            || { echo "::error::Line coverage ${line}% is below ${COVERAGE_THRESHOLD}%"; exit 1; }
 
-  # REST API + SQL database scenarios (no browser needed).
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: unit-results
+          path: TestResults/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage/
+
+  # REST API scenarios (no browser needed).
   api:
-    name: API & DB (@api, @db)
+    name: API (@api)
     needs: unit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-      - name: API + DB tests
+      - name: API tests
         run: |
-          # restful-booker can be slow; retry the suite up to 3 times.
+          # restful-booker is a shared public demo and sometimes slow, so the whole suite may
+          # be repeated. Single scenarios are never retried: a scenario that only passes on
+          # the second try would hide a real problem.
           for attempt in 1 2 3; do
             dotnet test ShopGuard/ShopGuard.E2ETests -c Release \
-              --filter "TestCategory=api|TestCategory=db" \
+              --filter "TestCategory=api" \
               --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/api.junit.xml" && exit 0
-            echo "attempt $attempt failed"
+            echo "::warning::API suite failed on attempt $attempt"
           done
           exit 1
-      - uses: actions/upload-artifact@v4
+      - name: Collect execution report
+        if: always()
+        run: |
+          mkdir -p api-report
+          cp ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/reqnroll-report.html api-report/index.html || true
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: api-results
-          path: TestResults/
+          path: |
+            TestResults/
+            api-report/
 
-  # Publish Living Documentation (BDD scenarios) + coverage report to GitHub Pages.
+  # Publishes the reports of this run to GitHub Pages.
   pages:
-    name: Publish report (Pages)
+    name: Publish reports (Pages)
     needs: [unit, api]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -88,48 +129,34 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
+          # 8.0 is only needed by the LivingDoc CLI below.
           dotnet-version: |
             8.0.x
             10.0.x
-      - name: Build site (Living Doc + coverage)
+      - uses: actions/download-artifact@v8
+        with:
+          name: coverage
+          path: site/coverage
+      - uses: actions/download-artifact@v8
+        with:
+          name: api-results
+          path: api-results
+      - name: Build site
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
-          mkdir -p site
-          # Coverage HTML
-          dotnet test ShopGuard/ShopGuard.UnitTests -c Release \
-            --collect:"XPlat Code Coverage" --results-directory cov
-          dotnet tool install --global dotnet-reportgenerator-globaltool
-          reportgenerator -reports:"cov/**/coverage.cobertura.xml" \
-            -targetdir:site/coverage -reporttypes:Html -assemblyfilters:"+ShopGuard.Core"
-          # Living Documentation from the Gherkin feature folder
+          # Execution report of the API scenarios (what ran and how it ended)
+          mkdir -p site/test-report
+          cp api-results/api-report/index.html site/test-report/index.html
+          # Living documentation: every scenario of the feature folder, including the UI and
+          # database scenarios that run in the local gate
           dotnet tool install --global SpecFlow.Plus.LivingDoc.CLI
           livingdoc feature-folder ShopGuard/ShopGuard.E2ETests/Features -o site/living-doc.html
-          # Landing page
-          cat > site/index.html <<'HTML'
-          <!doctype html><html lang="en"><meta charset="utf-8">
-          <title>ShopGuard — Reports</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <style>
-            body{font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:780px;margin:3rem auto;padding:0 1rem;background:#0f172a;color:#e2e8f0}
-            h1{font-size:1.8rem} a{color:#38bdf8}
-            .card{display:block;padding:1.2rem 1.4rem;margin:1rem 0;border:1px solid #1e3a5f;border-radius:12px;background:#13203b;text-decoration:none;color:inherit}
-            .card:hover{border-color:#38bdf8} .card h2{margin:0 0 .3rem;font-size:1.15rem;color:#38bdf8}
-            .muted{color:#94a3b8;font-size:.92rem}
-          </style>
-          <h1>🛡️ ShopGuard — Live Reports</h1>
-          <p class="muted">BDD test-automation framework · .NET 10 · Reqnroll · Playwright</p>
-          <a class="card" href="living-doc.html"><h2>📋 Living Documentation</h2>
-            <span class="muted">All Gherkin features &amp; scenarios (UI / API / DB), rendered from the feature folder.</span></a>
-          <a class="card" href="coverage/index.html"><h2>📊 Code Coverage</h2>
-            <span class="muted">ShopGuard.Core line/branch coverage (ReportGenerator).</span></a>
-          <p class="muted">Generated by GitHub Actions · <a href="https://github.com/AdrianDeutsch/ShopGuard">source on GitHub</a></p>
-          </html>
-          HTML
-      - uses: actions/upload-pages-artifact@v3
+          cp docs/pages/index.html site/index.html
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
