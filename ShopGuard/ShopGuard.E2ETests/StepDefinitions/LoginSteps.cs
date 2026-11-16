@@ -7,21 +7,17 @@ using ShopGuard.E2ETests.Support;
 namespace ShopGuard.E2ETests.StepDefinitions;
 
 [Binding]
-public sealed class LoginSteps(PlaywrightDriver driver, ScenarioState state)
+public sealed class LoginSteps(PlaywrightDriver driver, ShopApiContext shopApi, ScenarioState state)
 {
     private LoginPage LoginPage => new(driver.Page);
-    private RegisterPage RegisterPage => new(driver.Page);
-
-    private const string DefaultPassword = "ShopGuard!2026x";
 
     [Given("ich besitze ein registriertes Kundenkonto")]
     public async Task GivenRegisteredCustomerAccount()
     {
-        state.RegisteredEmail = TestDataGenerator.UniqueEmail("login");
-        state.RegisteredPassword = DefaultPassword;
-
-        await RegisterPage.OpenAsync();
-        await RegisterPage.RegisterAsync("Shop", "Guard", state.RegisteredEmail, state.RegisteredPassword);
+        // Created through the API, not the registration form: every scenario gets its own
+        // account in milliseconds, and a broken form only fails the registration scenario.
+        state.Customer = TestDataGenerator.NewCustomer("login");
+        await shopApi.Client.RegisterCustomerAsync(state.Customer);
     }
 
     [Given("ich bin auf der Login-Seite")]
@@ -31,20 +27,20 @@ public sealed class LoginSteps(PlaywrightDriver driver, ScenarioState state)
     public async Task GivenLoggedInCustomer()
     {
         await LoginPage.OpenAsync();
-        await LoginPage.LoginAsync(state.RegisteredEmail!, state.RegisteredPassword!);
+        await LoginPage.LoginAsync(state.Customer!.Email, state.Customer.Password);
         await driver.Page.WaitForURLAsync("**/account");
     }
 
     [When("ich mich mit gültigen Zugangsdaten anmelde")]
     public async Task WhenLoginWithValidCredentials()
     {
-        await LoginPage.LoginAsync(state.RegisteredEmail!, state.RegisteredPassword!);
+        await LoginPage.LoginAsync(state.Customer!.Email, state.Customer.Password);
         await driver.Page.WaitForURLAsync("**/account");
     }
 
     [When("ich mich mit dem falschen Passwort {string} anmelde")]
     public Task WhenLoginWithWrongPassword(string wrongPassword)
-        => LoginPage.LoginAsync(state.RegisteredEmail!, wrongPassword);
+        => LoginPage.LoginAsync(state.Customer!.Email, wrongPassword);
 
     [When("ich mich mit der E-Mail {string} und dem Passwort {string} anmelde")]
     public Task WhenLoginWithCredentials(string email, string password)
@@ -62,19 +58,12 @@ public sealed class LoginSteps(PlaywrightDriver driver, ScenarioState state)
         => (await LoginPage.IsLoggedInAsync()).Should().BeFalse();
 
     [Then("sehe ich die Fehlermeldung {string}")]
-    public async Task ThenErrorMessageShown(string expectedFragment)
+    public async Task ThenErrorMessageShown(string expectedMessage)
     {
-        // The shop must reject the login with a visible error. The exact wording
-        // differs between deployments (the public site says "Invalid email or
-        // password", the self-hosted build "Login failed"), so we assert that a
-        // rejection message is shown and matches the expected text or a known
-        // equivalent rather than coupling the test to volatile copy.
-        var actual = await LoginPage.GetErrorMessageAsync();
-        string[] knownRejections = [expectedFragment, "Invalid email or password", "Login failed"];
-
-        actual.Should().NotBeNullOrWhiteSpace();
-        actual.Should().Match(message =>
-            knownRejections.Any(phrase => message.Contains(phrase, StringComparison.OrdinalIgnoreCase)));
+        // Wrong password and unknown e-mail must produce the same text, otherwise the login
+        // would reveal which e-mail addresses have an account. Both scenarios expect the same
+        // message, so a difference between the two cases fails one of them.
+        (await LoginPage.GetErrorMessageAsync()).Should().Be(expectedMessage);
     }
 
     [Then("sehe ich einen Validierungsfehler am E-Mail-Feld")]

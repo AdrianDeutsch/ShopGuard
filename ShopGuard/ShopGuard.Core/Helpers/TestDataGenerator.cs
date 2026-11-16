@@ -21,6 +21,30 @@ public static class TestDataGenerator
     public static string UniqueSuffix()
         => $"{DateTime.UtcNow:yyyyMMddHHmmssfff}{Interlocked.Increment(ref _sequence)}";
 
+    /// <summary>
+    /// Creates a customer with a unique e-mail address and a fixed, valid postal address.
+    /// The password satisfies the shop's rules (length, upper/lower case, digit, symbol).
+    /// </summary>
+    public static CustomerAccount NewCustomer(string emailPrefix = "customer")
+        => new()
+        {
+            FirstName = "Shop",
+            LastName = "Guard",
+            Email = UniqueEmail(emailPrefix),
+            Password = "ShopGuard!2026x",
+            DateOfBirth = new DateOnly(1990, 1, 15),
+            Phone = "03012345678",
+            Address = new CustomerAddress
+            {
+                Street = "Teststraße",
+                HouseNumber = "1",
+                City = "Berlin",
+                State = "Berlin",
+                Country = "DE",
+                PostalCode = "10115",
+            },
+        };
+
     /// <summary>Creates a valid default booking with a stay in the future.</summary>
     public static Booking DefaultBooking(string? firstName = null)
     {

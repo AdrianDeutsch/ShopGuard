@@ -24,9 +24,6 @@ public sealed class CartSteps(PlaywrightDriver driver, ScenarioState state)
         await AddCurrentProductToCartAsync();
     }
 
-    [When("ich das Produkt in den Warenkorb lege")]
-    public Task WhenAddCurrentProductToCart() => AddCurrentProductToCartAsync();
-
     [When("ich das Produkt aus dem Warenkorb entferne")]
     public async Task WhenRemoveProductFromCart()
     {
@@ -44,8 +41,7 @@ public sealed class CartSteps(PlaywrightDriver driver, ScenarioState state)
     [Then("die Gesamtsumme entspricht der Summe der hinzugefügten Produkte")]
     public async Task ThenCartTotalMatchesAddedProducts()
     {
-        var expected = PriceCalculator.CalculateCartTotal(
-            state.AddedProductPrices.Select((price, index) => new CartItem($"Item {index}", price, 1)));
+        var expected = PriceCalculator.CalculateCartTotal(state.CartItems);
 
         (await CartPage.GetTotalAsync()).Should().Be(expected);
     }
@@ -56,7 +52,10 @@ public sealed class CartSteps(PlaywrightDriver driver, ScenarioState state)
 
     private async Task AddCurrentProductToCartAsync()
     {
-        state.AddedProductPrices.Add(await ProductPage.GetPriceAsync());
+        // Remember name and price as the customer sees them; later steps compare the cart
+        // total and the persisted invoice against these values.
+        state.CartItems.Add(new CartItem(
+            await ProductPage.GetProductNameAsync(), await ProductPage.GetPriceAsync(), Quantity: 1));
         await ProductPage.AddToCartAsync();
     }
 }

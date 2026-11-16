@@ -20,6 +20,14 @@ public sealed class PlaywrightHooks(PlaywrightDriver driver, ScenarioContext sce
     [AfterScenario("@ui")]
     public async Task CaptureArtifactsOnFailureAsync()
     {
+        // An earlier hook may have ended the scenario before the browser started (a skipped
+        // @db scenario, a failed browser launch). There is nothing to capture then, and
+        // touching the page would hide the real reason behind a second error.
+        if (!driver.IsInitialized)
+        {
+            return;
+        }
+
         try
         {
             if (scenarioContext.TestError is not null)
@@ -47,6 +55,9 @@ public sealed class PlaywrightHooks(PlaywrightDriver driver, ScenarioContext sce
             await driver.DisposeAsync();
         }
     }
+
+    [AfterTestRun]
+    public static Task CloseBrowserAsync() => PlaywrightDriver.ShutdownAsync();
 
     private static string Sanitize(string scenarioTitle)
     {

@@ -7,12 +7,12 @@ using ShopGuard.Core.Api;
 namespace ShopGuard.UnitTests.Support;
 
 /// <summary>
-/// Builds a <see cref="BookingApiClient"/> on top of a Moq-mocked HttpMessageHandler,
-/// so unit tests can assert URLs, headers and payloads without any network access.
+/// Builds the API clients on top of a Moq-mocked HttpMessageHandler, so unit tests can
+/// assert URLs, headers and payloads without any network access.
 /// </summary>
 public sealed class HttpMockFactory
 {
-    public const string BaseAddress = "https://restful-booker.test/";
+    public const string BaseAddress = "https://api.test/";
 
     private readonly Queue<(HttpStatusCode Status, string Body)> _responses = new();
 
@@ -26,8 +26,13 @@ public sealed class HttpMockFactory
         return this;
     }
 
-    /// <summary>Creates the client under test wired to the mocked handler.</summary>
-    public BookingApiClient CreateClient()
+    /// <summary>Creates a booking API client wired to the mocked handler.</summary>
+    public BookingApiClient CreateClient() => new(CreateHttpClient());
+
+    /// <summary>Creates a shop API client wired to the mocked handler.</summary>
+    public ShopApiClient CreateShopClient() => new(CreateHttpClient());
+
+    private HttpClient CreateHttpClient()
     {
         var handler = new Mock<HttpMessageHandler>(MockBehavior.Strict);
         handler
@@ -52,7 +57,6 @@ public sealed class HttpMockFactory
                 };
             });
 
-        var httpClient = new HttpClient(handler.Object) { BaseAddress = new Uri(BaseAddress) };
-        return new BookingApiClient(httpClient);
+        return new HttpClient(handler.Object) { BaseAddress = new Uri(BaseAddress) };
     }
 }

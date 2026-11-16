@@ -1,10 +1,17 @@
-# Self-hosted "Toolshop" (practicesoftwaretesting.com) for running the UI E2E
-# tests against a local instance — avoids the Cloudflare bot challenge that the
-# public site serves to data-center IPs (GitHub-hosted runners).
+# Self-hosted "Toolshop" (practicesoftwaretesting.com) as the system under test for the UI and
+# database scenarios. A local instance avoids the Cloudflare bot challenge that the public
+# site serves to data-center IPs, and it gives the tests direct access to the shop's database.
 #
-# Uses the project's prebuilt sprint5 images (no source build).
-#   UI  -> http://localhost:4200   (Angular, ng serve)
+# The images are pinned to the versions the suite was verified against. Without a pin,
+# "latest" would silently put a different shop version under test.
+#
+# The upstream images are built for different CPU architectures: API and UI for amd64, the
+# nginx front for arm64. Docker Desktop runs both (one of them emulated). A Linux host needs
+# QEMU registered for the architecture that is not its own.
+#
+#   UI  -> http://localhost:4200   (Angular production build, served statically)
 #   API -> http://localhost:8091   (Laravel via nginx/php-fpm)
+#   DB  -> localhost:3306          (MariaDB, database "toolshop")
 name: toolshop
 
 services:
@@ -19,7 +26,8 @@ services:
       - "3306:3306"
 
   laravel-api:
-    image: testsmith/practice-software-testing-sprint5-api
+    image: testsmith/practice-software-testing-sprint5-api:2.3
+    platform: linux/amd64
     environment:
       - "PHP_OPCACHE_VALIDATE_TIMESTAMPS=1"
       - "DB_PORT=3306"
@@ -32,7 +40,9 @@ services:
       - mariadb
 
   web:
-    image: testsmith/practice-software-testing-web
+    # Published only as "latest", so the pin is the digest.
+    image: testsmith/practice-software-testing-web@sha256:950bafdc86501002c381e35d9b70e298fe211f4ab1fbfda334b67f03dffa048d
+    platform: linux/arm64
     ports:
       - "8091:80"
       - "8000:81"
@@ -42,11 +52,12 @@ services:
       - laravel-api
 
   angular-ui:
-    image: testsmith/practice-software-testing-sprint5-ui
-    # Point the app at the local API, build a production bundle, and serve it as
-    # static files with SPA fallback. A production build renders instantly — unlike
-    # the Vite dev server (ng serve), which recompiles modules on demand and is too
-    # slow/unreliable per fresh browser context on CI runners.
+    image: testsmith/practice-software-testing-sprint5-ui:2.3
+    platform: linux/amd64
+    # Point the app at the local API, build a production bundle, and serve it as static files
+    # with SPA fallback. The image's default is the Angular dev server, which compiles routes
+    # on first request; a fresh browser context per scenario then waits for a compile every
+    # time. The production build takes a few minutes once, on container start.
     command: >
       bash -lc "
         sed -i \"s#apiUrl: '[^']*'#apiUrl: 'http://localhost:8091'#\" src/environments/environment.prod.ts &&

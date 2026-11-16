@@ -22,7 +22,7 @@ public sealed class CheckoutSteps(PlaywrightDriver driver, ScenarioState state)
     [When("ich den Checkout mit Standardadresse und Zahlung per Nachnahme abschließe")]
     public async Task WhenCompleteCheckoutWithDefaults()
     {
-        await CheckoutPage.CompleteBillingAddressAsync(houseNumber: "1");
+        await CheckoutPage.ConfirmBillingAddressAsync();
         await CheckoutPage.PayWithCashOnDeliveryAsync();
     }
 
@@ -31,6 +31,6 @@ public sealed class CheckoutSteps(PlaywrightDriver driver, ScenarioState state)
     {
         var invoiceNumber = await CheckoutPage.GetInvoiceNumberAsync();
         invoiceNumber.Should().MatchRegex(@"^INV-\d+$");
-        state.OrderNumber = invoiceNumber;
+        state.InvoiceNumber = invoiceNumber;
     }
 }

@@ -1,21 +1,25 @@
+using NUnit.Framework;
 using Reqnroll;
 using ShopGuard.E2ETests.Database;
-using ShopGuard.E2ETests.Support;
 
 namespace ShopGuard.E2ETests.Hooks;
 
-/// <summary>
-/// Cleans up order rows created by @db scenarios so every run starts isolated.
-/// </summary>
 [Binding]
-public sealed class DatabaseHooks(DatabaseContext database, ScenarioState state)
+public sealed class DatabaseHooks
 {
-    [AfterScenario("@db")]
-    public void RemoveScenarioOrders()
+    /// <summary>
+    /// Database checks need direct access to the shop's MariaDB, which only the self-hosted
+    /// shop offers. Against any other target the scenario is reported as skipped, with the
+    /// reason, instead of failing on a connection error.
+    /// </summary>
+    [BeforeScenario("@db", Order = 0)]
+    public static void SkipWithoutDatabaseAccess()
     {
-        if (state.CustomerEmail is not null)
+        if (!ShopDatabaseContext.IsConfigured)
         {
-            database.Orders.DeleteByCustomer(state.CustomerEmail);
+            Assert.Ignore(
+                "No shop database configured for this environment. " +
+                "Run with SHOPGUARD_ENV=selfhosted against the Toolshop from docker/toolshop.compose.yml.");
         }
     }
 }
