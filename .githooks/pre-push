@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 #
-# Local quality gate: run the Playwright UI scenarios and the checks against the shop's
-# database before every push.
+# Optional local gate: run the Playwright UI scenarios and the checks against the shop's
+# database before a push leaves this machine.
 #
-# Why a git hook instead of the push pipeline? The scenarios need the demo shop running.
-# The public site is Cloudflare-protected, and the self-hosted stack is heavy for a hosted
-# runner: it builds the Angular app on start and mixes amd64 and arm64 images. On a developer
-# machine with Docker Desktop it is up in minutes and stays up, so the gate lives here. The
-# hosted CI keeps running unit + integration + API + reports.
+# The pipeline runs the same scenarios on every push (job "ui" in .github/workflows/ci.yml).
+# The hook brings the answer forward: a red scenario is caught here, not minutes later in CI.
+# Enable it with:  git config core.hooksPath .githooks
 #
 # Bypass when you really need to (e.g. no Docker at hand):
 #   SKIP_UI_TESTS=1 git push

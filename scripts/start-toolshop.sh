@@ -3,7 +3,7 @@
 # Starts the self-hosted Toolshop (docker/toolshop.compose.yml) and returns once it is ready
 # for the tests: API up, catalog seeded, UI served. Safe to call when the shop already runs.
 #
-# Used by the pre-push hook, by the manual UI workflow and by hand:
+# Used by the pipeline (job "ui"), by the pre-push hook and by hand:
 #   scripts/start-toolshop.sh
 set -euo pipefail
 
@@ -44,7 +44,7 @@ if ! has_products; then
   exit 1
 fi
 
-# The UI container builds the Angular app on start, which takes a few minutes the first time.
+# The UI container builds the Angular app on start; until that is done nothing is served.
 echo "toolshop: waiting for the UI..."
 wait_for "$UI" 180 || { echo "toolshop: the UI did not come up."; exit 1; }
 
