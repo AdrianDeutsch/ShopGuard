@@ -136,6 +136,9 @@ or two calls.
 | Living documentation | All features and scenarios, including the one kept as `@wip` |
 | Code coverage | Line and branch coverage of `ShopGuard.Core` from unit and integration tests |
 
+<img src="docs/images/live-report.png" width="700" alt="Report page on GitHub Pages">
+<br><em>The published report page: both test reports, living documentation and coverage</em>
+
 <img src="docs/images/coverage-report.png" width="700" alt="Coverage report">
 <br><em>Coverage report (ReportGenerator), merged from the unit and the integration test run</em>
 
@@ -323,6 +326,9 @@ flowchart LR
 | `api` | `@api` scenarios with HTML report | the suite may be repeated, single scenarios never |
 | `ui` | starts the Toolshop on the runner, then the `@ui` and `@db` scenarios with HTML report | screenshots and traces of failed scenarios are kept as artifact |
 | `pages` | publishes both test reports, living documentation, coverage and badge to GitHub Pages | only on `main` |
+
+<img src="docs/images/pipeline-green.png" width="700" alt="Pipeline run on GitHub Actions">
+<br><em>A run on <code>main</code>: all four jobs green in three and a half minutes</em>
 
 `api` and `ui` run in parallel. The weekly run exists because the API under test belongs to a
 third party: it can change without a commit in this repository.
