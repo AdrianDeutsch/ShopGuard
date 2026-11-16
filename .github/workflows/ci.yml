@@ -2,14 +2,11 @@ name: CI
 
 # Fail-fast test pyramid on hosted runners:
 #   unit   unit tests + integration tests (real MariaDB in a container) + coverage gate
-#   api    REST scenarios against restful-booker, with an execution report
-#   pages  publishes test report, living documentation and coverage to GitHub Pages
+#   api    REST scenarios against restful-booker
+#   ui     Playwright scenarios and database checks against a self-hosted Toolshop
+#   pages  publishes test reports, living documentation and coverage to GitHub Pages
 #
-# The Playwright UI scenarios and the checks against the shop's own database are NOT run
-# here: the public demo shop sits behind a Cloudflare bot challenge, and the self-hosted
-# Toolshop needs several minutes to start. They are gated locally instead, by
-# .githooks/pre-push against a self-hosted Toolshop, and can be run on a hosted runner on
-# demand with ui.yml (see README).
+# api and ui run in parallel once unit is green.
 
 on:
   push:
@@ -115,10 +112,59 @@ jobs:
             TestResults/
             api-report/
 
+  # UI scenarios and the checks against the shop's own database. The shop is started on the
+  # runner from docker/toolshop.compose.yml. Its API and UI images are amd64 and run natively;
+  # the nginx image is arm64 and runs under QEMU.
+  ui:
+    name: UI & database (@ui)
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SHOPGUARD_ENV: selfhosted
+      HEADLESS: "true"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Register QEMU for the arm64 container
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+      - name: Start the Toolshop
+        run: scripts/start-toolshop.sh
+      - name: Build and install Chromium
+        run: |
+          dotnet build ShopGuard/ShopGuard.E2ETests -c Release
+          pwsh ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+      - name: UI and database scenarios
+        run: |
+          # @wip marks the expected behaviour of an open product defect; it is red on purpose.
+          dotnet test ShopGuard/ShopGuard.E2ETests -c Release --no-build \
+            --filter "TestCategory=ui&TestCategory!=wip" \
+            --logger "junit;LogFilePath=$GITHUB_WORKSPACE/TestResults/ui.junit.xml"
+      - name: Toolshop logs
+        if: failure()
+        run: docker compose -f docker/toolshop.compose.yml logs --tail 200
+      - name: Collect execution report
+        if: always()
+        run: |
+          mkdir -p ui-report
+          cp ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/reqnroll-report.html ui-report/index.html || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ui-results
+          path: |
+            TestResults/
+            ui-report/
+            ShopGuard/ShopGuard.E2ETests/bin/Release/net10.0/artifacts/
+
   # Publishes the reports of this run to GitHub Pages.
   pages:
     name: Publish reports (Pages)
-    needs: [unit, api]
+    needs: [unit, api, ui]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -144,14 +190,18 @@ jobs:
         with:
           name: api-results
           path: api-results
+      - uses: actions/download-artifact@v8
+        with:
+          name: ui-results
+          path: ui-results
       - name: Build site
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
-          # Execution report of the API scenarios (what ran and how it ended)
-          mkdir -p site/test-report
-          cp api-results/api-report/index.html site/test-report/index.html
-          # Living documentation: every scenario of the feature folder, including the UI and
-          # database scenarios that run in the local gate
+          # Execution reports: what ran in this pipeline and how each step ended
+          mkdir -p site/test-report/api site/test-report/ui
+          cp api-results/api-report/index.html site/test-report/api/index.html
+          cp ui-results/ui-report/index.html site/test-report/ui/index.html
+          # Living documentation: every scenario of the feature folder
           dotnet tool install --global SpecFlow.Plus.LivingDoc.CLI
           livingdoc feature-folder ShopGuard/ShopGuard.E2ETests/Features -o site/living-doc.html
           cp docs/pages/index.html site/index.html

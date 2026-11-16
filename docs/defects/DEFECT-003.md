@@ -64,7 +64,7 @@ arbeiten also korrekt.
 
 - **Soll-Szenario:** `Registrierung.feature`, "Die im Formular eingegebene Hausnummer wird
   gespeichert", getaggt mit `@wip @defect-003`. Es prüft das erwartete Verhalten gegen die
-  Datenbank, ist bis zur Behebung rot und läuft in keinem Gate.
+  Datenbank, ist bis zur Behebung rot und läuft weder in der Pipeline noch im Hook.
 - **Testkonten** der übrigen Szenarien entstehen über die API und haben eine Hausnummer. Der
   Fehler löst dort keinen Folgefehler mehr aus.
 - **Kein Workaround mehr im Checkout.** Bis 2026-11-16 trug das Page Object die Hausnummer im

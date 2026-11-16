@@ -6,7 +6,7 @@
 |---|---|
 | Test ist rot, der Wiederholungslauf grün — ohne Codeänderung | CI-Log des `api`-Jobs: jede Wiederholung der Suite hinterlässt eine Warnung „API suite failed on attempt n“ |
 | Fehlerbild ist ein Timeout, kein Assertion-Fehler | JUnit-Report: `TimeoutException` vs. `Should().Be(...)` |
-| Fehler tritt nur im Gesamtlauf auf, nicht einzeln | Kompletter Lauf (Gate, wöchentlicher CI-Lauf) vs. gezielter Einzellauf |
+| Fehler tritt nur im Gesamtlauf auf, nicht einzeln | Kompletter Lauf (Pipeline) vs. gezielter Einzellauf |
 | Trace zeigt korrektes App-Verhalten, nur später als erwartet | `playwright show-trace artifacts/<szenario>.trace.zip` |
 
 **Regel:** Jeder rote E2E-Test wird zuerst klassifiziert (Produktfehler / Testfehler / flaky),
@@ -66,17 +66,17 @@ Beispiel aus diesem Projekt: der Checkout-Timeout sah flaky aus, war aber DEFECT
   großzügige, zentral konfigurierte Timeouts (`DefaultTimeoutMs` in `appsettings.test.json`)
   und eine Wiederholung der ganzen Suite in der CI — aber **kein** Retry auf Szenario-Ebene,
   damit Instabilität sichtbar bleibt.
-- Der Toolshop läuft für die UI-Szenarien selbst gehostet, mit festgelegten Image-Versionen
-  ([toolshop.compose.yml](docker/toolshop.compose.yml)). Damit ändert sich das System unter
-  Test nur, wenn die Version im Repository geändert wird.
+- Der Toolshop läuft für die UI-Szenarien selbst gehostet, lokal wie in der Pipeline, mit
+  festgelegten Image-Versionen ([toolshop.compose.yml](docker/toolshop.compose.yml)). Damit
+  ändert sich das System unter Test nur, wenn die Version im Repository geändert wird.
 
 ## Workflow bei Verdacht auf Flakiness
 
-1. Trace + Screenshot ansehen: bei UI-Szenarien im Ordner `artifacts/` neben dem Testlauf,
-   bei API-Szenarien den Report aus den Artefakten des CI-Jobs.
+1. Trace + Screenshot aus den Artefakten des CI-Jobs laden (`ui-results` bzw. `api-results`);
+   bei einem lokalen Lauf liegen sie im Ordner `artifacts/` neben dem Testlauf.
 2. Lokal 5× gezielt ausführen: `dotnet test --filter "Name~<Szenario>"`.
 3. Klassifizieren: Produktfehler → Defect Report; Testfehler → fixen; flaky → Wait/Selektor/Datenisolation prüfen.
-4. Bis zur Behebung: Szenario mit `@wip` taggen (läuft in keinem Gate), Ticket verlinken — niemals stillschweigend löschen.
+4. Bis zur Behebung: Szenario mit `@wip` taggen (läuft weder in der Pipeline noch im Hook), Ticket verlinken — niemals stillschweigend löschen.
 
 Dasselbe Tag trägt ein Szenario, das einen **bekannten, noch offenen Produktfehler** beschreibt:
 `Registrierung.feature` enthält das Soll-Verhalten zu DEFECT-003 als `@wip @defect-003`. Es ist

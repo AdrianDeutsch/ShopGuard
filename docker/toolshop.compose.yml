@@ -57,7 +57,7 @@ services:
     # Point the app at the local API, build a production bundle, and serve it as static files
     # with SPA fallback. The image's default is the Angular dev server, which compiles routes
     # on first request; a fresh browser context per scenario then waits for a compile every
-    # time. The production build takes a few minutes once, on container start.
+    # time. The production build runs once, on container start, and takes about a minute.
     command: >
       bash -lc "
         sed -i \"s#apiUrl: '[^']*'#apiUrl: 'http://localhost:8091'#\" src/environments/environment.prod.ts &&
